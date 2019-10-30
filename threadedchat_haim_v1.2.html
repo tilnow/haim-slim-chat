@@ -1,0 +1,270 @@
+<html lang=en>
+  <head>
+    <meta charset=utf-8>
+    <title>Haim's slim chat</title>
+  </head>
+  <body>
+    <div id="threads"><p>list of threads</p><div id="threads list"></div></div>
+    <ul id="message-list"></ul>
+   <ul id="message-list-end"></ul>
+    <form id="message-form">
+      <input type="text" width=200 id='message-text'>
+      <input type="submit">
+    </form>
+
+    <script src="https://unpkg.com/@pusher/chatkit-client@1/dist/web/chatkit.js"></script>
+    <script>
+      const tokenProvider = new Chatkit.TokenProvider({
+  url: "https://us1.pusherplatform.io/services/chatkit_token_provider/v1/e2810fb1-3660-4a1a-a753-b27f1cafc2bd/token"
+      });
+
+const chatManager = new Chatkit.ChatManager({
+  instanceLocator: "v1:us1:e2810fb1-3660-4a1a-a753-b27f1cafc2bd",
+  userId: "haim",
+  tokenProvider: tokenProvider
+});
+current_thread=0;
+thread_room_id="not defined as room was deleted"; //probably not needed
+basecamp_room_id="b93580c4-6398-494e-b3c6-c45b8e4fd9f3" //maybe will revert to room[0]. but i like knowing where i am...
+var threadtable=[{id: 0, name: "basethread", closed: false}];
+var message_list = [];
+
+
+function create_new_thread_maybe(s)
+{
+    existing=threadtable.find((function (a){return a.name==s;}));
+    console.log('i found'+ existing)
+    if (!existing) {
+        newid=threadtable.length;
+        threadtable.push({id: newid,name: s,closed: false});
+    }
+    else {
+    newid=existing.id
+    }
+    return newid;
+}
+
+function rename_thread_maybe(s)
+{
+    existing=threadtable.find((function (a){return a.name==s;}));
+    if (!existing) {
+        threadtable[current_thread].name=s;
+    }
+}
+
+function inview()
+{
+var elmnt = document.getElementById("message-text");
+elmnt.scrollIntoView();
+}
+
+function update_thread_list(cu)
+{
+            cu.updateRoom({ 
+                roomId: basecamp_room_id,
+                customData: threadtable,
+            })
+            .catch(err => {
+                console.log(`Error when trying to update room ${basecamp_room_id}: ${err}`)
+            })
+}
+function namefromnum(num)
+{
+if (threadtable[num]){ return threadtable[num].name;}
+else {return "n/a"+num;}
+}
+
+function set_thread(x)
+{
+val=parseInt(x.split("_")[0])
+//alert("change to thread" + val+ "__"+x);
+current_thread=val;
+update_endmessage_display(current_thread)
+}
+function update_message_display(x)
+{
+         
+                const ul = document.getElementById("message-list");
+                ul.innerHTML="";
+ 
+               message_list.forEach((function (item,index){
+                tts=`${(function () {
+    if (item.parts.length>1) { return namefromnum(parseInt(item.parts[1].payload.content));} else {return "none";};
+})()} (${item.senderId}): ${
+                    item.parts[0].payload.content 
+                  }`;
+
+var btn = document.createElement("BUTTON");   
+btn.innerHTML = tts;                   
+btn.id=parseInt(item.parts[1].payload.content).toString()+"_"+index.toString()+"_"+item.id.toString();//thread num then internal message id then external message id
+btn.addEventListener("click", function(){
+  set_thread(btn.id);});
+
+               const li = document.createElement("li");
+               li.appendChild(
+                  btn//document.createTextNode(tts)
+                );ul.appendChild(li);}));
+    inview();         
+}
+
+
+function update_endmessage_display(x)
+{
+         
+                const ul = document.getElementById("message-list-end");
+                ul.innerHTML="";
+ 
+ if(x!=0){
+                message_list.forEach((function (item,index){
+                tn=(function () {
+    if (item.parts.length>1) { return parseInt(item.parts[1].payload.content);} else {return -1;};
+})();
+    if(tn< 0 || tn !=x) return;    
+    tts=`${namefromnum(parseInt(tn))} (${item.senderId}): ${
+                    item.parts[0].payload.content 
+                  }`;
+
+var btn = document.createElement("BUTTON");   
+btn.innerHTML = tts;                   
+btn.id=parseInt(item.parts[1].payload.content).toString()+"_"+index.toString()+"_"+item.id.toString()+"_thread";//thread num then internal message id then external message id then the fact it is a thread
+btn.addEventListener("click", function(){
+  set_thread(btn.id);});
+
+               const li = document.createElement("li");
+               li.appendChild(
+                  btn//document.createTextNode(tts)
+                );ul.appendChild(li);}));
+
+
+}
+     inview();               
+}
+
+function parse_input(text, currentUser)
+{
+            if (text.startsWith(":list open")) {
+                document.getElementById("threads list").innerHTML=""
+              threadtable.forEach((function (item, index) { if (!item.closed) {document.getElementById("threads list").innerHTML += index + ":" + item.name + " isclosed: "+ item.closed + "<br>";}}));
+            text="[command]";
+            } else if (text.startsWith(":list closed")) {
+                document.getElementById("threads list").innerHTML=""
+              threadtable.forEach((function (item, index) { if (item.closed) {document.getElementById("threads list").innerHTML += index + ":" + item.name + " isclosed: "+ item.closed + "<br>";}}));
+            text="[command]";
+            } else if (text.startsWith(":list")) {
+                document.getElementById("threads list").innerHTML=""
+              threadtable.forEach((function (item, index) { document.getElementById("threads list").innerHTML += index + ":" + item.name + " isclosed: "+ item.closed + "<br>";}));
+            text="[command]";
+            }
+           if (text.startsWith(":help")) {
+                
+            alert( "commands are as follows:\n :new name OR :new name: text will start new thread 'name'\n"+":list (or :list open or :list closed) will list threads\n"+":close & :reopen will do what you think\n"+":rename name will change name of current thread\n"+":show will show the latest messages of current thread (but not basethread)\n"+"change thread by clicking on message");
+            text="[command]";
+            }
+          if (text.startsWith(":dump")) {
+            st=""
+            message_list.forEach(function (item,index){st=st+index.toString()+":"+item.senderId+":"+item.parts[1].payload.content+":"+item.parts[0].payload.content+"\n";})
+            alert(st);
+         window.open('mailto:pusher@fensterfamily.net?subject=messdump&body='+encodeURIComponent(st)); //does not seem to work...
+            text="[command]";
+            }
+         if (text.startsWith(":show")) {
+            update_endmessage_display(current_thread);
+            text="[command]";
+            }
+
+            if (text.startsWith(":close")) {
+                threadtable[current_thread].closed=true;
+            text="[command]";
+            update_thread_list(currentUser);
+            }
+            if (text.startsWith(":reopen")) {
+//here add functionality that if it si followed by a number... lets first do teh click stuff
+                threadtable[current_thread].closed=false;
+            text="[command]";
+            update_thread_list(currentUser);
+            }
+//need to make it clickable so that reply works with any thread or message we clicked on
+            if (text.startsWith(":rename")) {
+                start=7; 
+                end=text.indexOf(":",8);
+                if(end> -1) {newthreadname=text.slice(8,end); text=text.slice(end+1);} else {newthreadname = text.slice(start); text="[command]";}
+                newthreadname=newthreadname.trim();
+                rename_thread_maybe(newthreadname);
+                update_thread_list(currentUser);
+            }
+            
+            if (text.startsWith(":new")) {
+                start=4; 
+                end=text.indexOf(":",5); 
+                if(end> -1) {newthreadname=text.slice(5,end); text=text.slice(end+1);} else {newthreadname = text.slice(start); text="[command]";}
+                newthreadname=newthreadname.trim();
+                current_thread=create_new_thread_maybe(newthreadname);
+                update_thread_list(currentUser);
+            }
+    return text;
+}
+
+
+
+      chatManager
+        .connect({
+            onAddedToRoom: room =>{console.log("yes, connected to room so updtaing threads");
+            threadtable=room.customData;
+            },
+            onRoomUpdated: room =>{console.log("now update threads from the room data");
+            threadtable=room.customData;
+            }
+
+        })
+        .then(currentUser => {
+
+//currentUser.updateRoom({ //see if we retain information - also WAS needed first time for bootstraping so there is customdata in the room
+//  roomId: basecamp_room_id,
+//  customData: threadtable,
+//probbaly shoudl eb GETTING teh custom data here. though maybe you get teh updated event automatically
+//})
+//  .catch(err => {
+//    console.log(`Error updated room ${basecamp_room_id}: ${err}`)
+//  })
+
+
+          currentUser.subscribeToRoomMultipart({
+            roomId: basecamp_room_id,
+            hooks: {
+              onMessage: message => {
+                message_list.push(message);
+                update_message_display(0);
+              }
+            },
+            messageLimit: 100
+          }).then(room=>
+
+          {
+threadtable=room.customData;
+parse_input(":list",currentUser);
+            const form = document.getElementById("message-form");
+          form.addEventListener("submit", e => {
+            e.preventDefault();
+            const input = document.getElementById("message-text");
+            text=input.value;
+            input.value = "";
+            text=parse_input(text, currentUser);
+
+            currentUser.sendMultipartMessage({
+                roomId: basecamp_room_id,
+                parts:[
+                    { type: "text/plain", content: text },
+                    { type: "text/plain", content: current_thread.toString() }
+                ]
+            });
+          });
+        })})
+        .catch(error => {
+          console.error("error:", error);
+        });
+    </script>
+  </body>
+</html>
+
+
+
