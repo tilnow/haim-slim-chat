@@ -1,0 +1,305 @@
+<html lang=en>
+  <head>
+    <meta charset=utf-8>
+    <title>Haim's slim chat</title>
+  </head>
+  <body>
+    <div id="message-list"></div>
+    <form id="message-form">
+      <input type="text" size=100 id='message-text'>
+      <input type="submit">
+    </form>
+
+    <script src="https://unpkg.com/@pusher/chatkit-client@1/dist/web/chatkit.js"></script>
+    <script>
+      const tokenProvider = new Chatkit.TokenProvider({
+  url: "https://us1.pusherplatform.io/services/chatkit_token_provider/v1/e2810fb1-3660-4a1a-a753-b27f1cafc2bd/token"
+      });
+var helps={};
+helps["_"]="";
+var commands={};
+last_id=0;
+txt=window.prompt("are you maier or haim?","maier");
+if(txt!="maier" && txt!="haim"){txt="haim";}
+const chatManager = new Chatkit.ChatManager({
+  instanceLocator: "v1:us1:e2810fb1-3660-4a1a-a753-b27f1cafc2bd",
+  userId: txt,
+  tokenProvider: tokenProvider
+});
+//alert(chatManager.userId);
+var currentUser;
+current_thread=0;
+thread_room_id="not defined as room was deleted"; //probably not needed
+basecamp_room_id="b93580c4-6398-494e-b3c6-c45b8e4fd9f3" //maybe will revert to room[0]. but i like knowing where i am...
+var threadtable=[{id: 0, name: "basethread", closed: false}];
+var message_list = [];
+
+
+function create_new_thread_maybe(s)
+{
+    existing=threadtable.find((function (a){return a.name==s;}));
+    console.log('i found'+ existing)
+    if (!existing) {
+        newid=threadtable.length;
+        threadtable.push({id: newid,name: s,closed: false});
+    }
+    else {
+    newid=existing.id;
+    }
+    return newid;
+}
+
+function rename_thread_maybe(s)
+{
+    existing=threadtable.find((function (a){return a.name==s;}));
+    if (!existing) {
+        threadtable[current_thread].name=s;
+    }
+}
+
+function inview()
+{
+var elmnt = document.getElementById("message-text");
+elmnt.scrollIntoView();
+}
+
+function update_thread_list(cu)
+{
+            cu.updateRoom({ 
+                roomId: basecamp_room_id,
+                customData: threadtable,
+            })
+            .catch(err => {
+                console.log(`Error when trying to update room ${basecamp_room_id}: ${err}`)
+            })
+}
+function namefromnum(num)
+{
+if (threadtable[num]){ return threadtable[num].name;}
+else {return "n/a"+num;}
+}
+
+function urlify(text) {
+    var urlRegex = /(https?:\/\/[^\s]+)/g;
+    return text.replace(urlRegex, function(url) {
+        return '<a href="' + url + '" target="_blank">' + url + '</a>';
+    })
+    // or alternatively
+    // return text.replace(urlRegex, '<a href="$1">$1</a>')
+}
+
+function set_thread(x) 
+{
+val=parseInt(x.split("_")[0]);
+//alert("change to thread" + val+ "__"+x);
+set_thread_by_id(val);
+return val;
+}
+function set_thread_by_id(v) 
+{
+current_thread=v;
+update_endmessage_display(current_thread);
+return(v);
+}
+
+function add_mess_to_list(ul,item,index){
+                tts1=`${(function () {
+    if (item.parts.length>1) { return namefromnum(parseInt(item.parts[1].payload.content));} else {return "none";};
+})()} (${item.senderId}):`;
+                tts2=`${
+                    item.parts[0].payload.content 
+                  }`;
+bid=parseInt(item.parts[1].payload.content).toString()+"_"+index.toString()+"_"+item.id.toString();//thread num then internal message id then external message id
+
+
+tts2=urlify(tts2);
+
+               const li = document.createElement("div");
+ihtml='<button id="'+bid+'" style="text-align: left;" onclick="set_thread('+"'"+bid+"'"+');">'+tts1+':</button>'
+li.innerHTML=ihtml+tts2;
+if(item.senderId!=chatManager.userId){li.style="display: flex; justify-content: flex-end; background-color:black; color: white"; }
+else{li.style="display: flex; justify-content: flex-start";}
+
+            ul.appendChild(li);
+
+//<span style="background-color:currentColor"><span style="color:black">Text here</span></span>
+
+
+}
+
+function update_message_display(x)
+{
+         
+                const ul = document.getElementById("message-list");
+                //ul.innerHTML="";
+ 
+               message_list.forEach((function (item,index){if(item.id>last_id){
+                add_mess_to_list(ul,item,index);
+                last_id=item.id;
+}}));
+    inview();         
+}
+
+
+function update_endmessage_display(x)
+{
+
+         
+                const ul = document.getElementById("message-list");
+                message_list.forEach((function (item,index){
+                tn=(function () {
+    if (item.parts.length>1) { return parseInt(item.parts[1].payload.content);} else {return -1;};
+})();
+    if(tn< 0 || tn !=x) return;    
+    
+    add_mess_to_list(ul,item,index)
+}));
+
+
+
+     inview();               
+}
+
+
+
+
+function add_command(cmd,func,help)
+{
+    commands[cmd]= func;
+    helps[cmd]=help;
+    helps["_"]+=help+"\n";
+}
+
+function append_at_end_of_mess_list(x)
+{
+    const ul = document.getElementById("message-list");
+            ul.appendChild(x);
+
+}
+function append_text_at_end_of_mess_list(txt)
+{
+    const ul = document.getElementById("message-list");
+            ul.appendChild(document.createTextNode(txt));
+
+}
+function show_threads(x){//x is open, closed or all
+               const li = document.createElement("div");
+
+              threadtable.forEach((function (item, index) { if (item.closed==x) {li.innerHTML += index + ":" + item.name + " isclosed: "+ item.closed + "<br>";}}));
+append_text_at_end_of_mess_list("thread list");
+        append_at_end_of_mess_list(li);
+}
+
+function set_up_commands()
+{
+    add_command("list-open", function(){    show_threads(false);},":list-open lists the open threads");
+    add_command("list-closed", function(){show_threads(true); },":list-closed lists the closed threads");
+    add_command("list", function(){show_threads(true);show_threads(false);},":list  lists all the threads");
+    add_command("help", function(){t=text.split(" ")[1]; if(!t || t==""){t="_";};alert(helps[t]);},":help  shows the help message");
+    add_command("dump", function(){            st=""
+            message_list.forEach(function (item,index){st=st+index.toString()+":"+item.senderId+":"+item.parts[1].payload.content+":"+item.parts[0].payload.content+"\n";})
+            alert(st);
+         window.open('mailto:pusher@fensterfamily.net?subject=messdump&body='+encodeURIComponent(st)); },":dump is some sort of export which does not work");
+    add_command("show", function(){update_endmessage_display(current_thread);},":show refreshes message display");
+    add_command("close", function(){               threadtable[current_thread].closed=true;
+            update_thread_list(currentUser);
+},":close closes current thread");
+    add_command("reopen", function(){                threadtable[current_thread].closed=false;
+            update_thread_list(currentUser);//maybe add number functionality
+},":reopens a closed thread");
+    add_command("rename", function(){start=7; 
+                end=text.indexOf(":",8);
+                if(end> -1) {newthreadname=text.slice(8,end); text=text.slice(end+1);} else {newthreadname = text.slice(start);}
+                newthreadname=newthreadname.trim();
+                rename_thread_maybe(newthreadname);
+                update_thread_list(currentUser);},":rename renames the current thread");
+
+    add_command("new", function(){               start=4; 
+                end=text.indexOf(":",5); 
+                if(end> -1) {newthreadname=text.slice(5,end); text=text.slice(end+1);} else {newthreadname = text.slice(start); }
+                newthreadname=newthreadname.trim();
+                current_thread=create_new_thread_maybe(newthreadname);
+                update_thread_list(currentUser);
+                set_thread_by_id(current_thread);//a  fudge because set_thread not defined right for both new and show
+ },":new opens a new thread or switches if existing");
+
+
+
+
+}
+function parse_input(text)
+{
+            if(text[0]==":"){
+                cmd=text.slice(1).split(" ")[0];
+                commands[cmd]();
+                //alert(cmd);
+            }
+
+            return text;
+ 
+}
+
+    set_up_commands();
+
+      chatManager
+        .connect({
+            onAddedToRoom: room =>{console.log("yes, connected to room so updtaing threads");
+            threadtable=room.customData;
+            },
+            onRoomUpdated: room =>{console.log("now update threads from the room data");
+            threadtable=room.customData;
+            }
+
+        })
+        .then(_currentUser => {
+            currentUser=_currentUser;
+//currentUser.updateRoom({ //see if we retain information - also WAS needed first time for bootstraping so there is customdata in the room
+//  roomId: basecamp_room_id,
+//  customData: threadtable,
+//probbaly shoudl eb GETTING teh custom data here. though maybe you get teh updated event automatically
+//})
+//  .catch(err => {
+//    console.log(`Error updated room ${basecamp_room_id}: ${err}`)
+//  })
+
+
+          currentUser.subscribeToRoomMultipart({
+            roomId: basecamp_room_id,
+            hooks: {
+              onMessage: message => {
+                message_list.push(message);
+                update_message_display(0);
+              }
+            },
+            messageLimit: 100
+          }).then(room=>
+
+          {
+threadtable=room.customData;
+parse_input(":list-open");//doesn't alwasy work, as initial message listing probbaly erases it
+            const form = document.getElementById("message-form");
+          form.addEventListener("submit", e => {
+            e.preventDefault();
+            const input = document.getElementById("message-text");
+            text=input.value;
+            input.value = "";
+            text=parse_input(text);
+
+            currentUser.sendMultipartMessage({
+                roomId: basecamp_room_id,
+                parts:[
+                    { type: "text/plain", content: text },
+                    { type: "text/plain", content: current_thread.toString() }
+                ]
+            });
+          });
+        })})
+        .catch(error => {
+          console.error("error:", error);
+        });
+    </script>
+  </body>
+</html>
+
+
+

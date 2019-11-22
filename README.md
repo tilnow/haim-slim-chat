@@ -1,4 +1,4 @@
 # haim-slim-chat
-[link (./threadedchat_maier_v1.2.html)]
+[link (./threadedchat_v1.4.html)]
 
 
